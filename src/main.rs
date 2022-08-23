@@ -1,13 +1,13 @@
 use std::fs;
 
-use constants::{get_name_modifiers, Modifier};
+use constants::{get_base_types, get_name_modifiers, Modifier};
 use nom::{
     branch::{alt, permutation},
     bytes::complete::{tag, take},
     character::complete::{digit1, one_of},
     combinator::opt,
     multi::{count, many0},
-    sequence::preceded,
+    sequence::{delimited, preceded},
     Parser,
 };
 
@@ -16,6 +16,7 @@ mod constants;
 #[derive(Debug, Clone)]
 enum Name {
     Identifier(String),
+    BaseType(char),
     WithArguments(Box<Name>, Vec<Name>),
     Template(Box<Name>, Vec<Name>),
     Modifier(Modifier, Box<Name>),
@@ -55,12 +56,19 @@ fn read_modifier(input: &str) -> nom::IResult<&str, Name> {
     Ok((input, Name::Modifier(modifier, Box::new(name))))
 }
 
+fn type_ref(input: &str) -> nom::IResult<&str, Name> {
+    let (input, t) = delimited(tag("Z"), digit1, tag("Z"))(input)?;
+    let t = t.parse::<usize>().unwrap();
+
+    Ok((input, Name::Identifier(t.to_string())))
+}
+
 fn read_names(input: &str) -> nom::IResult<&str, Vec<Name>> {
     many0(read_name)(input)
 }
 
 fn arguments(input: &str) -> nom::IResult<&str, Vec<Name>> {
-    preceded(tag("F"), read_names)(input)
+    preceded(alt((tag("F"), tag("CF"))), read_names)(input)
 }
 
 fn namespace(input: &str) -> nom::IResult<&str, Name> {
@@ -73,8 +81,26 @@ fn namespace(input: &str) -> nom::IResult<&str, Name> {
     Ok((input, Name::Namespace(path)))
 }
 
+fn base_type(input: &str) -> nom::IResult<&str, Name> {
+    let base_types = get_base_types()
+        .keys()
+        .map(|x| x.to_string())
+        .collect::<Vec<_>>()
+        .join("");
+
+    let (input, base_type) = one_of(base_types.as_str())(input)?;
+
+    Ok((input, Name::BaseType(base_type)))
+}
+
 fn read_name(input: &str) -> nom::IResult<&str, Name> {
-    let (mut input, mut name) = alt((read_name_identifier, namespace, read_modifier))(input)?;
+    let (mut input, mut name) = alt((
+        read_name_identifier,
+        namespace,
+        read_modifier,
+        type_ref,
+        base_type,
+    ))(input)?;
     loop {
         let res = preceded(opt(tag("__")), arguments)(input);
         if let Ok((new_input, args)) = res {
@@ -141,7 +167,11 @@ fn main() {
         .split("\n")
         .map(|x| {
             if x.contains("__") {
-                format!("{}{}", x.find("__").unwrap(), x)
+                if x.find("__") == Some(0) {
+                    format!("{}{}", 2 + x[2..].find("__").unwrap(), x)
+                } else {
+                    format!("{}{}", x.find("__").unwrap(), x)
+                }
             } else {
                 format!("{}{}", x.len(), x)
             }
