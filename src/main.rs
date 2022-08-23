@@ -23,6 +23,9 @@ enum Name {
     Namespace(Vec<Name>),
     InName(Box<Name>, Box<Name>),
     WithReturnValue(Box<Name>, Box<Name>),
+
+    Names_Ref(usize),
+    Names_Multi(usize, usize),
 }
 
 fn read_name_identifier(input: &str) -> nom::IResult<&str, Name> {
@@ -63,8 +66,25 @@ fn type_ref(input: &str) -> nom::IResult<&str, Name> {
     Ok((input, Name::Identifier(t.to_string())))
 }
 
+fn read_name_ref(input: &str) -> nom::IResult<&str, Name> {
+    let (input, _) = tag("T")(input)?;
+    let (input, index) = digit1(input)?;
+
+    Ok((input, Name::Names_Ref(index.parse::<usize>().unwrap())))
+}
+
 fn read_names(input: &str) -> nom::IResult<&str, Vec<Name>> {
-    many0(read_name)(input)
+    let (input, names) = many0(alt((read_name, read_name_ref)))(input)?;
+
+    let mut ret: Vec<Name> = Vec::new();
+    for name in names {
+        match name {
+            Name::Names_Ref(index) => ret.push(ret[index - 1].clone()),
+            _ => ret.push(name),
+        }
+    }
+
+    Ok((input, ret))
 }
 
 fn arguments(input: &str) -> nom::IResult<&str, Vec<Name>> {
@@ -150,9 +170,19 @@ fn template(input: &str) -> nom::IResult<&str, Vec<Name>> {
     Ok((input, names))
 }
 
+fn decompress(mut input: &str) -> &str {
+    println!("{}", input);
+    if input.starts_with("__ghs_thunk__") {
+        input = &input[25..];
+    }
+
+    input
+}
+
 fn demangle(input: &str) -> nom::IResult<&str, Name> {
     let (input, name_obj) = read_name(input)?;
     if !input.is_empty() {
+        println!("{:?}", name_obj);
         return Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::NonEmpty,
@@ -162,9 +192,10 @@ fn demangle(input: &str) -> nom::IResult<&str, Name> {
 }
 
 fn main() {
-    fs::read_to_string("/shared/WiiU/functions")
+    fs::read_to_string("/shared/WiiU/GhidraScript/a.txt")
         .unwrap()
         .split("\n")
+        .map(decompress)
         .map(|x| {
             if x.contains("__") {
                 if x.find("__") == Some(0) {
