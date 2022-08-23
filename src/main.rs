@@ -25,6 +25,7 @@ fn read_name_identifier(input: &str) -> nom::IResult<&str, Name> {
 
     Ok((input, Name::Identifier(ident.to_string())))
 }
+
 fn read_modifier(input: &str) -> nom::IResult<&str, Name> {
     let modifiers = get_name_modifiers()
         .keys()
@@ -39,12 +40,15 @@ fn read_modifier(input: &str) -> nom::IResult<&str, Name> {
 
     Ok((input, Name::Modifier(modifier, Box::new(name))))
 }
+
 fn read_names(input: &str) -> nom::IResult<&str, Vec<Name>> {
     many0(read_name)(input)
 }
+
 fn arguments(input: &str) -> nom::IResult<&str, Vec<Name>> {
     preceded(tag("F"), read_names)(input)
 }
+
 fn read_name(input: &str) -> nom::IResult<&str, Name> {
     let (mut input, mut name) =
         alt((read_name_identifier, read_name_identifier, read_modifier))(input)?;
