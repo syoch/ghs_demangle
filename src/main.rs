@@ -7,7 +7,7 @@ use nom::{
     character::complete::{digit1, one_of},
     combinator::opt,
     multi::{count, many0},
-    sequence::{delimited, preceded},
+    sequence::{delimited, preceded, terminated},
     Parser,
 };
 
@@ -60,7 +60,12 @@ fn read_modifier(input: &str) -> nom::IResult<&str, Name> {
 }
 
 fn type_ref(input: &str) -> nom::IResult<&str, Name> {
-    let (input, t) = delimited(tag("Z"), digit1, tag("Z"))(input)?;
+    // TODO: Z\d_\dZ
+    let (input, t) = delimited(
+        tag("Z"),
+        terminated(digit1, permutation((tag("_"), digit1))),
+        tag("Z"),
+    )(input)?;
     let t = t.parse::<usize>().unwrap();
 
     Ok((input, Name::Identifier(t.to_string())))
@@ -102,7 +107,7 @@ fn read_names(input: &str) -> nom::IResult<&str, Vec<Name>> {
 }
 
 fn arguments(input: &str) -> nom::IResult<&str, Vec<Name>> {
-    preceded(alt((tag("F"), tag("CF"))), read_names)(input)
+    preceded(alt((tag("F"), tag("CF"), tag("SF"))), read_names)(input)
 }
 
 fn namespace(input: &str) -> nom::IResult<&str, Name> {
