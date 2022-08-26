@@ -190,7 +190,6 @@ fn template(input: &str) -> nom::IResult<&str, Vec<Name>> {
 }
 
 fn decompress(input: &str) -> nom::IResult<&str, String> {
-    println!("{}", input);
     let input = if input.starts_with("__ghs_thunk__") {
         &input[25..]
     } else {
@@ -227,7 +226,6 @@ fn decompress(input: &str) -> nom::IResult<&str, String> {
                 }
             }
         }
-        println!("{}", decompressed);
         decompressed
     } else {
         input.to_string()
@@ -239,6 +237,7 @@ fn decompress(input: &str) -> nom::IResult<&str, String> {
 fn demangle(input: &str) -> nom::IResult<&str, Name> {
     let (input, name_obj) = read_name(input)?;
     if !input.is_empty() {
+        println!("Error");
         println!("{:?}", name_obj);
         return Err(nom::Err::Error(nom::error::Error::new(
             input,
