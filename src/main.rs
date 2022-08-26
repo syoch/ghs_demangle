@@ -170,13 +170,51 @@ fn template(input: &str) -> nom::IResult<&str, Vec<Name>> {
     Ok((input, names))
 }
 
-fn decompress(mut input: &str) -> &str {
+fn decompress(input: &str) -> nom::IResult<&str, String> {
     println!("{}", input);
-    if input.starts_with("__ghs_thunk__") {
-        input = &input[25..];
-    }
+    let input = if input.starts_with("__ghs_thunk__") {
+        &input[25..]
+    } else {
+        input
+    };
 
-    input
+    let input = if input.starts_with("__CPR") {
+        let input = &input[5..];
+
+        let (input, decompressed_length) = digit1(input)?;
+        let (input, _) = tag("__")(input)?;
+        let raw_data = input;
+        let _decompressed_length = decompressed_length.parse::<usize>().unwrap();
+
+        let tokens = raw_data.split("J");
+        let mut decompressed = "".to_string();
+
+        for (i, c) in tokens.enumerate() {
+            if i % 2 == 0 {
+                decompressed += c;
+            } else {
+                if c.is_empty() {
+                    decompressed += "J";
+                } else {
+                    let offset = c.parse::<usize>().unwrap();
+
+                    let mut s = "".to_string();
+                    for c in decompressed[offset..].chars() {
+                        s.push(c);
+                    }
+
+                    let t = extract_string(&s).unwrap().1;
+                    decompressed += &(t.len().to_string() + t);
+                }
+            }
+        }
+        println!("{}", decompressed);
+        decompressed
+    } else {
+        input.to_string()
+    };
+
+    Ok(("", input))
 }
 
 fn demangle(input: &str) -> nom::IResult<&str, Name> {
@@ -195,7 +233,7 @@ fn main() {
     fs::read_to_string("/shared/WiiU/GhidraScript/a.txt")
         .unwrap()
         .split("\n")
-        .map(decompress)
+        .map(|x| decompress(x).unwrap().1)
         .map(|x| {
             if x.contains("__") {
                 if x.find("__") == Some(0) {
