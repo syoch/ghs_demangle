@@ -73,13 +73,27 @@ fn read_name_ref(input: &str) -> nom::IResult<&str, Name> {
     Ok((input, Name::Names_Ref(index.parse::<usize>().unwrap())))
 }
 
+fn read_name_repeat(input: &str) -> nom::IResult<&str, Name> {
+    let (input, _) = tag("N")(input)?;
+    let (input, index) = one_of("0123456789")(input)?;
+    let (input, index2) = one_of("0123456789")(input)?;
+    let index = index.to_string().parse::<usize>().unwrap();
+    let index2 = index2.to_string().parse::<usize>().unwrap();
+    Ok((input, Name::Names_Multi(index, index2)))
+}
+
 fn read_names(input: &str) -> nom::IResult<&str, Vec<Name>> {
-    let (input, names) = many0(alt((read_name, read_name_ref)))(input)?;
+    let (input, names) = many0(alt((read_name, read_name_ref, read_name_repeat)))(input)?;
 
     let mut ret: Vec<Name> = Vec::new();
     for name in names {
         match name {
             Name::Names_Ref(index) => ret.push(ret[index - 1].clone()),
+            Name::Names_Multi(count, index) => {
+                for i in 0..=count {
+                    ret.push(ret[index - 1].clone());
+                }
+            }
             _ => ret.push(name),
         }
     }
