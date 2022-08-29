@@ -35,6 +35,61 @@ enum Name {
     Names_Multi(usize, usize),
 }
 
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Identifier(x) => write!(f, "{x}"),
+            Self::BaseType(x) => write!(f, "{}", get_base_types()[x]),
+            Self::WithArguments(base, args) => write!(
+                f,
+                "{}({})",
+                base,
+                args.iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::Template(base, args) => write!(
+                f,
+                "{}<{}>",
+                base,
+                args.iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            Self::Modifier(x, y) => match x {
+                Modifier::OnPrefix(s) => write!(f, "{} {}", s, y),
+                Modifier::OnSuffix(s) => write!(f, "{} {}", y, s),
+            },
+            Self::Namespace(x) => write!(
+                f,
+                "{}",
+                x.iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join("::")
+            ),
+            Self::InName(leaf, parent) => write!(f, "{}::{}", parent, leaf),
+            Self::WithReturnValue(base, ret) => write!(f, "{} {}", ret, base),
+            Self::FunctionPointer(args, ret) => {
+                write!(
+                    f,
+                    "({} *({}))",
+                    ret,
+                    args.iter()
+                        .map(|x| x.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            Self::ValueArgument(ty, val) => write!(f, "{val} as {ty}"),
+            Self::Names_Ref(x) => write!(f, "<NameRef {}>", x),
+            Self::Names_Multi(x, y) => write!(f, "<NameRepeat {} times of {}>", y, x),
+        }
+    }
+}
+
 impl Name {
     fn identifier_from_string(ident: String) -> Name {
         Name::Identifier(ident)
@@ -320,7 +375,7 @@ fn demangle(input: &str) -> nom::IResult<&str, Name> {
     let (input, name_obj) = read_function(input)?;
     if !input.is_empty() {
         println!("Error");
-        println!("{:?}", name_obj);
+        println!("{:}", name_obj);
         return Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::NonEmpty,
@@ -352,6 +407,6 @@ fn main() {
             }
         })
         .map(|x| demangle(x.as_str()).expect(&x).1.to_owned())
-        .map(|x| println!("{x:?}"))
+        .map(|x| println!("{x}"))
         .collect::<Vec<_>>();
 }
