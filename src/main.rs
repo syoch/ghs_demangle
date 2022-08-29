@@ -15,17 +15,33 @@ mod constants;
 
 #[derive(Debug, Clone)]
 enum Name {
-    Identifier(String),
-    BaseType(char),
-    WithArguments(Box<Name>, Vec<Name>),
-    Template(Box<Name>, Vec<Name>),
-    Modifier(Modifier, Box<Name>),
-    Namespace(Vec<Name>),
-    InName(Box<Name>, Box<Name>),
-    WithReturnValue(Box<Name>, Box<Name>),
-
+    Identifier(String),                    // <String>
+    BaseType(char),                        // {base_types::get_base_types().keys |> one_of}
+    WithArguments(Box<Name>, Vec<Name>),   // <Name>[C][S]F<Names>
+    Template(Box<Name>, Vec<Name>),        // __tm__<UnderString=Names>
+    Modifier(Modifier, Box<Name>),         // <Modifier><Name>
+    Namespace(Vec<Name>),                  // Q<n>_[String; n]
+    InName(Box<Name>, Box<Name>),          // <Name>__<Name>
+    WithReturnValue(Box<Name>, Box<Name>), // <Name>_<Name>
+    FunctionPointer(Vec<Name>, Box<Name>), // F<Names>_<Name>
+    ValueArgument(Box<Name>, String),
+    /*
+        X[
+            (<String> -> value, "typename" -> type) |
+            (<Name> -> type, L_<UnderString> -> value)
+        ]
+    */
     Names_Ref(usize),
     Names_Multi(usize, usize),
+}
+
+impl Name {
+    fn identifier_from_string(ident: String) -> Name {
+        Name::Identifier(ident)
+    }
+    fn Identifier_from_str(ident: &str) -> Name {
+        Name::Identifier(ident.to_string())
+    }
 }
 
 fn read_name_identifier(input: &str) -> nom::IResult<&str, Name> {
@@ -39,6 +55,15 @@ fn read_name_identifier(input: &str) -> nom::IResult<&str, Name> {
 fn extract_string(input: &str) -> nom::IResult<&str, &str> {
     let (input, length) = digit1(input)?;
     let length = length.parse::<usize>().unwrap();
+    let (input, string) = take(length)(input)?;
+
+    Ok((input, string))
+}
+fn extract_string_with_under_bar(input: &str) -> nom::IResult<&str, &str> {
+    let (input, length) = digit1(input)?;
+    let length = length.parse::<usize>().unwrap();
+
+    let (input, _) = tag("_")(input)?;
     let (input, string) = take(length)(input)?;
 
     Ok((input, string))
@@ -59,11 +84,26 @@ fn read_modifier(input: &str) -> nom::IResult<&str, Name> {
     Ok((input, Name::Modifier(modifier, Box::new(name))))
 }
 
+fn value_argument(input: &str) -> nom::IResult<&str, Name> {
+    let (input, _) = tag("X")(input)?;
+    alt((
+        extract_string.map(|x| {
+            Name::ValueArgument(
+                Box::new(Name::Identifier_from_str("typename")),
+                x.to_string(),
+            )
+        }),
+        permutation((read_name, tag("L_"), extract_string_with_under_bar))
+            .map(|(t, _, v)| Name::ValueArgument(Box::new(t), v.to_string())),
+    ))
+    .parse(input)
+}
+
 fn type_ref(input: &str) -> nom::IResult<&str, Name> {
     // TODO: Z\d_\dZ
     let (input, t) = delimited(
         tag("Z"),
-        terminated(digit1, permutation((tag("_"), digit1))),
+        terminated(digit1, opt(permutation((tag("_"), digit1)))),
         tag("Z"),
     )(input)?;
     let t = t.parse::<usize>().unwrap();
@@ -88,14 +128,20 @@ fn read_name_repeat(input: &str) -> nom::IResult<&str, Name> {
 }
 
 fn read_names(input: &str) -> nom::IResult<&str, Vec<Name>> {
-    let (input, names) = many0(alt((read_name, read_name_ref, read_name_repeat)))(input)?;
+    let (input, names) = many0(alt((
+        read_name,
+        read_name_ref,
+        read_name_repeat,
+        value_argument,
+    )))(input)?;
 
     let mut ret: Vec<Name> = Vec::new();
+
     for name in names {
         match name {
             Name::Names_Ref(index) => ret.push(ret[index - 1].clone()),
             Name::Names_Multi(count, index) => {
-                for i in 0..=count {
+                for _ in 1..=count {
                     ret.push(ret[index - 1].clone());
                 }
             }
@@ -132,6 +178,16 @@ fn base_type(input: &str) -> nom::IResult<&str, Name> {
     Ok((input, Name::BaseType(base_type)))
 }
 
+fn function_pointer(input: &str) -> nom::IResult<&str, Name> {
+    let (input, _) = tag("F")(input)?;
+    permutation((read_names, tag("_"), read_name))
+        .map(|x| {
+            let (args, _, ret) = x;
+            Name::FunctionPointer(args, Box::new(ret))
+        })
+        .parse(input)
+}
+
 fn read_name(input: &str) -> nom::IResult<&str, Name> {
     let (mut input, mut name) = alt((
         read_name_identifier,
@@ -139,21 +195,10 @@ fn read_name(input: &str) -> nom::IResult<&str, Name> {
         read_modifier,
         type_ref,
         base_type,
+        function_pointer,
     ))(input)?;
-    loop {
-        let res = preceded(opt(tag("__")), arguments)(input);
-        if let Ok((new_input, args)) = res {
-            input = new_input;
-            name = Name::WithArguments(Box::new(name), args);
-            continue;
-        }
-        let res = preceded(tag("_"), read_name)(input);
-        if let Ok((new_input, return_value_type)) = res {
-            input = new_input;
-            name = Name::WithReturnValue(Box::new(name), Box::new(return_value_type));
-            continue;
-        }
 
+    loop {
         let res = template(input);
         if let Ok((new_input, args)) = res {
             input = new_input;
@@ -173,10 +218,46 @@ fn read_name(input: &str) -> nom::IResult<&str, Name> {
     Ok((input, name))
 }
 
+fn read_function(input: &str) -> nom::IResult<&str, Name> {
+    let (mut input, mut name) = read_name(input)?;
+    loop {
+        let res: nom::IResult<&str, &str> = tag("__S")(input);
+        if let Ok((new_input, _)) = res {
+            input = new_input;
+            // TODO: make name to static function
+            continue;
+        }
+
+        let res = preceded(opt(tag("__")), arguments)(input);
+        if let Ok((new_input, args)) = res {
+            input = new_input;
+            name = Name::WithArguments(Box::new(name), args);
+            continue;
+        }
+
+        let res = preceded(tag("_"), read_name)(input);
+        if let Ok((new_input, return_value_type)) = res {
+            input = new_input;
+            name = Name::WithReturnValue(Box::new(name), Box::new(return_value_type));
+            continue;
+        }
+
+        let res = preceded(tag("__"), read_name)(input);
+        if let Ok((new_input, parent)) = res {
+            input = new_input;
+            name = Name::InName(Box::new(name), Box::new(parent));
+            continue;
+        }
+        break;
+    }
+
+    Ok((input, name))
+}
+
 fn template(input: &str) -> nom::IResult<&str, Vec<Name>> {
     let (input, string) = preceded(tag("__tm__"), extract_string)(input)?;
     let string = &string[1..];
-
+    //template_value
     let (string, names) = read_names(string)?;
 
     if !string.is_empty() {
@@ -226,6 +307,7 @@ fn decompress(input: &str) -> nom::IResult<&str, String> {
                 }
             }
         }
+        println!("{}", decompressed);
         decompressed
     } else {
         input.to_string()
@@ -235,7 +317,7 @@ fn decompress(input: &str) -> nom::IResult<&str, String> {
 }
 
 fn demangle(input: &str) -> nom::IResult<&str, Name> {
-    let (input, name_obj) = read_name(input)?;
+    let (input, name_obj) = read_function(input)?;
     if !input.is_empty() {
         println!("Error");
         println!("{:?}", name_obj);
@@ -251,9 +333,15 @@ fn main() {
     fs::read_to_string("/shared/WiiU/GhidraScript/a.txt")
         .unwrap()
         .split("\n")
+        .map(|x| {
+            println!("{x}");
+            x
+        })
         .map(|x| decompress(x).unwrap().1)
         .map(|x| {
-            if x.contains("__") {
+            if x.starts_with("__") && (x.len() == 4 || x.len() == 5) {
+                format!("{}{}", x.len(), x)
+            } else if x.contains("__") {
                 if x.find("__") == Some(0) {
                     format!("{}{}", 2 + x[2..].find("__").unwrap(), x)
                 } else {
@@ -263,6 +351,7 @@ fn main() {
                 format!("{}{}", x.len(), x)
             }
         })
-        .map(|x| demangle(x.as_str()).unwrap().1.to_owned())
+        .map(|x| demangle(x.as_str()).expect(&x).1.to_owned())
+        .map(|x| println!("{x:?}"))
         .collect::<Vec<_>>();
 }
