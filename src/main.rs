@@ -31,6 +31,7 @@ enum Name {
             (<Name> -> type, L_<UnderString> -> value)
         ]
     */
+    SizedArray(usize, Box<Name>), // A[integer -> size]_[<Name> -> type]
     Names_Ref(usize),
     Names_Multi(usize, usize),
 }
@@ -84,6 +85,7 @@ impl std::fmt::Display for Name {
                 )
             }
             Self::ValueArgument(ty, val) => write!(f, "{val} as {ty}"),
+            Self::SizedArray(size, ty) => write!(f, "{ty}[{size}]"),
             Self::Names_Ref(x) => write!(f, "<NameRef {}>", x),
             Self::Names_Multi(x, y) => write!(f, "<NameRepeat {} times of {}>", y, x),
         }
@@ -153,7 +155,15 @@ fn value_argument(input: &str) -> nom::IResult<&str, Name> {
     ))
     .parse(input)
 }
+fn sized_array(input: &str) -> nom::IResult<&str, Name> {
+    let (input, _) = tag("A")(input)?;
+    let (input, size) = digit1(input)?;
+    let size = size.parse::<usize>().unwrap();
+    let (input, _) = tag("_")(input)?;
+    let (input, t) = read_name(input)?;
 
+    Ok((input, Name::SizedArray(size, Box::new(t))))
+}
 fn type_ref(input: &str) -> nom::IResult<&str, Name> {
     // TODO: Z\d_\dZ
     let (input, t) = delimited(
@@ -254,6 +264,7 @@ fn read_name(input: &str) -> nom::IResult<&str, Name> {
         type_ref,
         base_type,
         function_pointer,
+        sized_array,
     ))(input)?;
 
     loop {
