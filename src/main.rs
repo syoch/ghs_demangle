@@ -376,7 +376,7 @@ fn decompress(input: &str) -> nom::IResult<&str, String> {
                 }
             }
         }
-        println!("{}", decompressed);
+        // println!("{}", decompressed);
         decompressed
     } else {
         input.to_string()
@@ -388,8 +388,10 @@ fn decompress(input: &str) -> nom::IResult<&str, String> {
 fn demangle(input: &str) -> nom::IResult<&str, Name> {
     let (input, name_obj) = read_function(input)?;
     if !input.is_empty() {
-        println!("Error");
-        println!("{:}", name_obj);
+        println!("");
+        println!("### Error ###");
+        println!("name: {:}", name_obj);
+        println!("Remain: {:}", input);
         return Err(nom::Err::Error(nom::error::Error::new(
             input,
             nom::error::ErrorKind::NonEmpty,
@@ -398,29 +400,68 @@ fn demangle(input: &str) -> nom::IResult<&str, Name> {
     Ok((input, name_obj))
 }
 
+fn preprocess(x: String, dunder_search_index: usize) -> String {
+    if x.starts_with("__")
+        && x[2..]
+            .to_string()
+            .into_bytes()
+            .iter()
+            .all(|x| x.is_ascii_alphanumeric())
+    {
+        println!("{x} -> Returns with rule #0");
+        return format!("{}{}", x.len(), x);
+    }
+
+    if x.starts_with("__") && !x[2..].contains("__") {
+        // __[^__]*
+        println!("{x} -> Returns with rule #1");
+        return format!("{}{}", x.len(), x);
+    }
+
+    let mut predictions = vec![];
+
+    if let Some(i) = x.find("__F") {
+        predictions.push(i);
+    }
+
+    if let Some(i) = x.find("__tm__") {
+        predictions.push(i);
+    }
+
+    for i in 1..9 {
+        if let Some(i) = x.find(format!("Q{i}_").as_str()) {
+            predictions.push(i - 2);
+        }
+    }
+
+    if predictions.is_empty() {
+        println!("{x} -> Returns with rule #2");
+        return format!("{}{}", x.len(), x);
+    }
+
+    let mut min_index = 0;
+    for i in 0..predictions.len() {
+        if predictions[i] < predictions[min_index] {
+            min_index = i;
+        }
+    }
+    println!("{x} -> Selected #{min_index} of {predictions:?}");
+    return format!("{}{}", predictions[min_index], x);
+}
+
 fn main() {
-    fs::read_to_string("/shared/WiiU/GhidraScript/a.txt")
+    let _ = fs::read_to_string("/shared/WiiU/GhidraScript/a.txt")
         .unwrap()
         .split("\n")
-        .map(|x| {
-            println!("{x}");
-            x
-        })
         .map(|x| decompress(x).unwrap().1)
         .map(|x| {
-            if x.starts_with("__") && (x.len() == 4 || x.len() == 5) {
-                format!("{}{}", x.len(), x)
-            } else if x.contains("__") {
-                if x.find("__") == Some(0) {
-                    format!("{}{}", 2 + x[2..].find("__").unwrap(), x)
-                } else {
-                    format!("{}{}", x.find("__").unwrap(), x)
-                }
-            } else {
-                format!("{}{}", x.len(), x)
+            let formatted = preprocess(x.clone(), 0);
+            println!("Formatted: {formatted}");
+
+            if let Err(_) = demangle(formatted.as_str()) {
+                println!("Demangle failed: {x}");
+                std::process::exit(0);
             }
         })
-        .map(|x| demangle(x.as_str()).expect(&x).1.to_owned())
-        .map(|x| println!("{x}"))
         .collect::<Vec<_>>();
 }
