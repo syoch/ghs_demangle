@@ -17,11 +17,11 @@ pub fn get_name_modifiers() -> &'static HashMap<char, Modifier> {
         name_modifiers.insert('S', Modifier::OnPrefix("signed".to_string()));
         name_modifiers.insert('J', Modifier::OnPrefix("__complex".to_string()));
         name_modifiers.insert('M', Modifier::OnPrefix("[M]".to_string()));
-        name_modifiers.insert('P', Modifier::OnPrefix("*".to_string()));
-        name_modifiers.insert('R', Modifier::OnPrefix("&".to_string()));
-        name_modifiers.insert('C', Modifier::OnPrefix("const".to_string()));
-        name_modifiers.insert('V', Modifier::OnPrefix("volatile".to_string()));
-        name_modifiers.insert('u', Modifier::OnPrefix("restrict".to_string()));
+        name_modifiers.insert('P', Modifier::OnSuffix("*".to_string()));
+        name_modifiers.insert('R', Modifier::OnSuffix("&".to_string()));
+        name_modifiers.insert('C', Modifier::OnSuffix("const".to_string()));
+        name_modifiers.insert('V', Modifier::OnSuffix("volatile".to_string()));
+        name_modifiers.insert('u', Modifier::OnSuffix("restrict".to_string()));
 
         MODIFIERS.set(name_modifiers).unwrap();
         return get_name_modifiers();

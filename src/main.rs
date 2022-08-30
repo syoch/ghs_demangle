@@ -168,9 +168,12 @@ fn type_ref(input: &str) -> nom::IResult<&str, Name> {
 
 fn read_name_ref(input: &str) -> nom::IResult<&str, Name> {
     let (input, _) = tag("T")(input)?;
-    let (input, index) = digit1(input)?;
+    let (input, index) = one_of("0123456789")(input)?;
 
-    Ok((input, Name::Names_Ref(index.parse::<usize>().unwrap())))
+    Ok((
+        input,
+        Name::Names_Ref(index.to_string().parse::<usize>().unwrap()),
+    ))
 }
 
 fn read_name_repeat(input: &str) -> nom::IResult<&str, Name> {
