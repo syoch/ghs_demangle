@@ -387,16 +387,16 @@ fn decompress(input: &str) -> nom::IResult<&str, String> {
 
 fn demangle(input: &str) -> nom::IResult<&str, Name> {
     let (input, name_obj) = read_function(input)?;
-    if !input.is_empty() {
-        println!("");
-        println!("### Error ###");
-        println!("name: {:}", name_obj);
-        println!("Remain: {:}", input);
-        return Err(nom::Err::Error(nom::error::Error::new(
-            input,
-            nom::error::ErrorKind::NonEmpty,
-        )));
-    }
+    // if !input.is_empty() {
+    //     println!("");
+    //     println!("### Error ###");
+    //     println!("name: {:}", name_obj);
+    //     println!("Remain: {:}", input);
+    //     return Err(nom::Err::Error(nom::error::Error::new(
+    //         input,
+    //         nom::error::ErrorKind::NonEmpty,
+    //     )));
+    // }
     Ok((input, name_obj))
 }
 
@@ -450,13 +450,12 @@ fn preprocess(x: String, dunder_search_index: usize) -> String {
 }
 
 fn main() {
-    let _ = fs::read_to_string("/shared/WiiU/GhidraScript/a.txt")
+    let _ = fs::read_to_string("a.txt")
         .unwrap()
         .split("\n")
         .map(|x| decompress(x).unwrap().1)
         .map(|x| {
             let formatted = preprocess(x.clone(), 0);
-            println!("Formatted: {formatted}");
 
             if let Err(_) = demangle(formatted.as_str()) {
                 println!("Demangle failed: {x}");
