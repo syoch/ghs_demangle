@@ -14,7 +14,7 @@ use nom::{
 mod constants;
 
 #[derive(Debug, Clone)]
-enum Name {
+pub enum Name {
     Identifier(String),                    // <String>
     BaseType(char),                        // {base_types::get_base_types().keys |> one_of}
     WithArguments(Box<Name>, Vec<Name>),   // <Name>[C][S]F<Names>
@@ -385,7 +385,7 @@ fn decompress(input: &str) -> nom::IResult<&str, String> {
     Ok(("", input))
 }
 
-fn demangle(input: &str) -> nom::IResult<&str, Name> {
+fn _demangle(input: &str) -> nom::IResult<&str, Name> {
     let (input, name_obj) = read_function(input)?;
     // if !input.is_empty() {
     //     println!("");
@@ -449,18 +449,25 @@ fn preprocess(x: String, dunder_search_index: usize) -> String {
     return format!("{}{}", predictions[min_index], x);
 }
 
+pub fn demangle(x: String) -> Name {
+    let x = if let Ok(x) = decompress(&x) {
+        x.1
+    } else {
+        return Name::Identifier(x);
+    };
+    let x = preprocess(x, 0);
+    let x = if let Ok((_, x)) = _demangle(&x) {
+        x
+    } else {
+        return Name::Identifier(x);
+    };
+    x
+}
+
 fn main() {
     let _ = fs::read_to_string("a.txt")
         .unwrap()
         .split("\n")
-        .map(|x| decompress(x).unwrap().1)
-        .map(|x| {
-            let formatted = preprocess(x.clone(), 0);
-
-            if let Err(_) = demangle(formatted.as_str()) {
-                println!("Demangle failed: {x}");
-                std::process::exit(0);
-            }
-        })
+        .map(|x| demangle(x.to_string()))
         .collect::<Vec<_>>();
 }
