@@ -2,7 +2,7 @@
   "saveAndRun": {
     "commands": [
       {
-        "cmd": "cargo run"
+        "cmd": "wasm-pack build --target web"
       }
     ]
   }

@@ -10,6 +10,7 @@ use nom::{
     sequence::{delimited, preceded, terminated},
     Parser,
 };
+use wasm_bindgen::prelude::wasm_bindgen;
 
 mod constants;
 
@@ -462,6 +463,11 @@ pub fn demangle(x: String) -> Name {
         return Name::Identifier(x);
     };
     x
+}
+
+#[wasm_bindgen]
+pub fn demangle_str(x: &str) -> String {
+    format!("{:?}", demangle(x.to_string()))
 }
 
 fn main() {
