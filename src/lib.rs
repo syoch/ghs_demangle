@@ -436,6 +436,18 @@ fn preprocess(x: String, dunder_search_index: usize) -> String {
     }
 
     if predictions.is_empty() {
+        if x.split_once("__").map(|(a, b)| {
+            for c in b.chars() {
+                if !c.is_ascii_alphanumeric() {
+                    return false;
+                }
+            }
+            true
+        }) == Some(true)
+        {
+            println!("{x} -> Returns with rule #3");
+            return format!("{}{}", x.find("__").unwrap(), x);
+        }
         println!("{x} -> Returns with rule #2");
         return format!("{}{}", x.len(), x);
     }
@@ -466,8 +478,21 @@ pub fn demangle(x: String) -> Name {
 }
 
 #[wasm_bindgen]
-pub fn demangle_str(x: &str) -> String {
-    format!("{:?}", demangle(x.to_string()))
+pub fn demangle_str(x: String) -> String {
+    let x = if let Ok((_, x)) = decompress(&x) {
+        x
+    } else {
+        x
+    };
+
+    let x = preprocess(x, 0);
+    let x = if let Ok((_, x)) = _demangle(&x) {
+        x
+    } else {
+        Name::Identifier(x)
+    };
+
+    format!("{:#}", x)
 }
 
 fn main() {
@@ -476,4 +501,10 @@ fn main() {
         .split("\n")
         .map(|x| demangle(x.to_string()))
         .collect::<Vec<_>>();
+}
+
+#[test]
+fn t1() {
+    let x = demangle_str("A__1BFiii".to_string());
+    assert_eq!(x, "A::B()");
 }
