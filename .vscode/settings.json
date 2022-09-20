@@ -1,9 +1,0 @@
-{
-  "saveAndRun": {
-    "commands": [
-      {
-        "cmd": "wasm-pack build --target web"
-      }
-    ]
-  }
-}

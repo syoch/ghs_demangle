@@ -10,7 +10,6 @@ use nom::{
     sequence::{delimited, preceded, terminated},
     Parser,
 };
-use wasm_bindgen::prelude::wasm_bindgen;
 
 mod constants;
 
@@ -475,36 +474,4 @@ pub fn demangle(x: String) -> Name {
         return Name::Identifier(x);
     };
     x
-}
-
-#[wasm_bindgen]
-pub fn demangle_str(x: String) -> String {
-    let x = if let Ok((_, x)) = decompress(&x) {
-        x
-    } else {
-        x
-    };
-
-    let x = preprocess(x, 0);
-    let x = if let Ok((_, x)) = _demangle(&x) {
-        x
-    } else {
-        Name::Identifier(x)
-    };
-
-    format!("{:#}", x)
-}
-
-fn main() {
-    let _ = fs::read_to_string("a.txt")
-        .unwrap()
-        .split("\n")
-        .map(|x| demangle(x.to_string()))
-        .collect::<Vec<_>>();
-}
-
-#[test]
-fn t1() {
-    let x = demangle_str("A__1BFiii".to_string());
-    assert_eq!(x, "A::B()");
 }
